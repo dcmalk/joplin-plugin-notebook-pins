@@ -1,8 +1,7 @@
-import { MenuItemLocation } from 'api/types';
-
 export const COMMAND_PIN = 'notebookPins.pinInCurrentNotebook';
 export const COMMAND_UNPIN = 'notebookPins.unpinFromCurrentNotebook';
 export const COMMAND_OPEN_PINNED = 'notebookPins.openPinnedNote';
+const NOTE_LIST_CONTEXT_MENU = 'noteListContextMenu';
 
 interface CommandHandlers {
   onPinSelected: () => Promise<void>;
@@ -38,11 +37,11 @@ export const registerCommandsAndMenus = async (
   await joplin.views.menuItems.create(
     'notebookPins.pinInNotebook.menu',
     COMMAND_PIN,
-    MenuItemLocation.NoteListContextMenu,
+    NOTE_LIST_CONTEXT_MENU,
   );
   await joplin.views.menuItems.create(
     'notebookPins.unpinFromNotebook.menu',
     COMMAND_UNPIN,
-    MenuItemLocation.NoteListContextMenu,
+    NOTE_LIST_CONTEXT_MENU,
   );
 };

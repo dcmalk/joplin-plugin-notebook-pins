@@ -14,7 +14,7 @@
 
 - [x] Add max-pins-per-notebook setting and enforcement.
 - [x] Add baseline unit tests for storage and service logic.
-- [ ] Add integration tests with mocked Joplin API wiring.
+- [x] Add integration tests with mocked Joplin API wiring.
 - [ ] Add manual QA pass in Joplin desktop (Windows target).
 
 ## Milestone C (`v1.1`)

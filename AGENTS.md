@@ -2,8 +2,9 @@
 
 ## Project Structure & Module Organization
 This repository is currently specification-first:
-- `prd.md`: product requirements and scope.
-- `spec.md`: implementation-level technical decisions.
+- `docs/prd.md`: product requirements and scope.
+- `docs/spec.md`: implementation-level technical decisions.
+- `docs/implementation-tasks.md`: milestone task tracker.
 
 When code is added, follow the structure defined in `spec.md`:
 - `src/index.ts` (bootstrap/lifecycle)
@@ -13,13 +14,10 @@ When code is added, follow the structure defined in `spec.md`:
 Keep files focused by responsibility; avoid large multi-purpose modules.
 
 ## Build, Test, and Development Commands
-No build/test scripts are committed yet. When scaffolding, standardize on npm scripts:
+Current npm scripts:
 - `npm run build` - compile plugin source.
-- `npm run dev` - watch mode for local iteration.
+- `npm run typecheck` - strict TypeScript checks without output.
 - `npm test` - run all tests.
-- `npm run lint` - static checks.
-
-If you introduce tooling, update this section and `package.json` in the same PR.
 
 ## Coding Style & Naming Conventions
 - Language: TypeScript for plugin code.
@@ -32,10 +30,10 @@ If you introduce tooling, update this section and `package.json` in the same PR.
 - Unit-test storage and pin/unpin business logic.
 - Integration-test notebook switching, panel rendering payloads, and command wiring.
 - Test file naming: `*.test.ts` (unit) and `*.int.test.ts` (integration).
-- Target behavior from `spec.md` acceptance criteria (including notebook-context refresh timing).
+- Target behavior from `docs/spec.md` acceptance criteria (including notebook-context refresh timing).
 
 ## Commit & Pull Request Guidelines
-Git history is not initialized in this workspace; use Conventional Commits going forward:
+Use Conventional Commits:
 - `feat: add pin command wiring`
 - `fix: sanitize deleted note ids`
 - `docs: update spec edge cases`
@@ -48,5 +46,5 @@ PRs should include:
 
 ## Security & Configuration Tips
 - Do not commit secrets or local Joplin profile data.
-- Keep persisted state under the plugin setting key defined in `spec.md` (`notebookPins.state`).
+- Keep persisted state under the plugin setting key defined in `docs/spec.md` (`notebookPins.state`).
 - Validate and sanitize stored JSON before use.

@@ -4,7 +4,7 @@
 This repository is currently specification-first:
 - `docs/prd.md`: product requirements and scope.
 - `docs/spec.md`: implementation-level technical decisions.
-- `docs/implementation-tasks.md`: milestone task tracker.
+- `docs/tasks.md`: milestone task tracker.
 
 When code is added, follow the structure defined in `spec.md`:
 - `src/index.ts` (bootstrap/lifecycle)
@@ -16,6 +16,7 @@ Keep files focused by responsibility; avoid large multi-purpose modules.
 ## Build, Test, and Development Commands
 Current npm scripts:
 - `npm run build` - compile plugin source.
+- build output for Joplin dev loading should include `dist/index.js`.
 - `npm run typecheck` - strict TypeScript checks without output.
 - `npm test` - run all tests.
 

@@ -14,7 +14,7 @@ This plugin keeps important notes visible per notebook (for example, index notes
   - Drag reorder
   - Optional auto-migrate on note move
 
-See `docs/prd.md`, `docs/spec.md`, and `docs/implementation-tasks.md` for details.
+See `docs/prd.md`, `docs/spec.md`, and `docs/tasks.md` for details.
 
 ## Development Setup
 
@@ -36,11 +36,15 @@ Build:
 npm run build
 ```
 
+Expected output:
+
+- `dist/index.js` (Joplin development loader entrypoint)
+
 ## Using in Joplin (Development)
 
 This repository is currently intended for development loading.
 
-1. Build the plugin (`npm run build`).
+1. Build the plugin (`npm run build`) and confirm `dist/index.js` exists.
 2. In Joplin Desktop, open plugin advanced settings and set the development plugin path to this repository.
 3. Restart Joplin and enable the plugin.
 

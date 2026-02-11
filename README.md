@@ -2,89 +2,54 @@
 
 **Notebook-aware pinned notes for Joplin.**
 
-This plugin solves the problem of keeping key notes (like index notes or project dashboards) accessible within specific notebooks without resorting to "title hacks" (e.g., `!Index`) or changing your global sort order.
+Pin a few notes per notebook so they're always one click away. Pins are scoped to each notebook and shown in a compact panel that updates when you switch notebooks.
 
-## Features
-
-- 📌 **Notebook-Scoped:** Pins are attached to a specific notebook. Switching notebooks automatically refreshes the list.
-- ⚡ **Fast Access:** Dedicated side panel for one-click navigation to your most important notes.
-- ↔️ **Drag Reorder:** Reorder pinned notes directly in the pinned strip.
-- 🔁 **Optional Auto-Migrate:** Keep notes pinned when moved to another notebook.
-- 🧭 **Scrollbar Preference:** Choose whether horizontal scrollbars are shown in the pinned strip.
-- 🗑️ **Trash-Safe Cleanup:** Pins are removed automatically when notes are deleted/trashed.
-- 🧹 **Clean Workflow:** Does not modify your note titles or native note list sorting.
-- 💾 **Persistent:** Pins are saved and restored across sessions.
+No title hacks (`!Index`), no global sort changes, no note modifications.
 
 ## Usage
 
-1.  **Pin a Note:** Right-click a note in the note list and select **"Pin in this notebook"**.
-2.  **Open:** Click any note in the "Notebook Pins" panel to open it immediately.
-3.  **Reorder:** Drag pinned notes horizontally to reorder them.
-4.  **Unpin:** Right-click the note again to **"Unpin from this notebook"**, or use the command palette.
+1.  Right-click a note in the note list and select **"Pin in this notebook"**.
+2.  Click a pinned note in the panel to open it.
+3.  Drag to reorder. Right-click (or use the command palette) to unpin.
 
 ## Settings
 
-- **Max pins per notebook**: `0` means unlimited.
-- **Auto-migrate pins when notes move notebooks**: If enabled, moved notes stay pinned in their new notebook.
-- **Show horizontal scrollbar in pinned strip**: If enabled, shows the strip scrollbar; if disabled, scrolling still works.
+| Setting | Default | Description |
+|---------|---------|-------------|
+| Max pins per notebook | `0` (unlimited) | Cap the number of pins per notebook. |
+| Auto-migrate on move | Off | Keep a note pinned when it moves to another notebook. |
+| Show horizontal scrollbar | Off | Show/hide the strip scrollbar (scrolling still works either way). |
+
+Deleted or trashed notes are unpinned automatically.
 
 ---
 
-## Development Setup
+## Development
 
-Prerequisites:
-- Node.js 20+
-- npm
-
-Install and validate:
+Requires Node.js 20+ and npm.
 
 ```bash
 npm install
-npm run typecheck
-npm test
+npm run typecheck   # type-check only
+npm test            # unit + integration tests
+npm run build       # produces index.js and dist/panel-webview.js
 ```
 
-Build:
+### Loading in Joplin (dev mode)
 
-```bash
-npm run build
-```
+1. Run `npm run build`.
+2. In Joplin Desktop, go to plugin advanced settings and set the development plugin path to this repository.
+3. Restart Joplin.
 
-Expected output:
-
-- `index.js` (Joplin plugin entrypoint)
-- `dist/panel-webview.js` (panel webview client script)
-
-## Using in Joplin (Development)
-
-This repository is currently intended for development loading.
-
-1. Build the plugin (`npm run build`) and confirm `index.js` exists.
-2. In Joplin Desktop, open plugin advanced settings and set the development plugin path to this repository.
-3. Restart Joplin and enable the plugin.
-
-## Packaging (.jpl)
-
-To distribute/install without using a development path, create a `.jpl` package.
-
-1. Build the plugin:
+### Packaging (.jpl)
 
 ```powershell
 npm run build
-```
-
-2. Create the package (PowerShell):
-
-```powershell
 New-Item -ItemType Directory -Path .\release -Force | Out-Null
-tar -cf .\release\com.dcmalk.notebook-pins-0.1.1-rc.1.jpl manifest.json index.js dist README.md
+tar -cf .\release\notebook-pins.jpl manifest.json index.js dist README.md
 ```
 
-3. Install in Joplin:
- - Open `Tools -> Options -> Plugins`
- - Choose `Install from file`
- - Select the `.jpl` from `.\release`
- - Restart Joplin
+Then install via **Tools > Options > Plugins > Install from file**.
 
 ## Roadmap
 

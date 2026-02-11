@@ -66,7 +66,7 @@ npm run build
 
 ```powershell
 New-Item -ItemType Directory -Path .\release -Force | Out-Null
-tar -cf .\release\com.thirdorbitlabs.notebook-pins-0.1.1-rc.1.jpl manifest.json index.js dist README.md
+tar -cf .\release\com.dcmalk.notebook-pins-0.1.1-rc.1.jpl manifest.json index.js dist README.md
 ```
 
 3. Install in Joplin:
@@ -74,19 +74,6 @@ tar -cf .\release\com.thirdorbitlabs.notebook-pins-0.1.1-rc.1.jpl manifest.json 
  - Choose `Install from file`
  - Select the `.jpl` from `.\release`
  - Restart Joplin
-
-## Release Artifacts
-
-- Keep `.jpl` files in `.\release` as local build artifacts during development.
-- Do not commit generated `.jpl` files to the main source tree unless you intentionally version binaries.
-- Preferred distribution flow: create the `.jpl` locally/CI and attach it to a GitHub Release.
-
-## Contributing
-
-- Follow `AGENTS.md` for repository conventions.
-- Use Conventional Commits (`feat: ...`, `fix: ...`, `docs: ...`).
-- Include test evidence in pull requests.
-- See `docs/` for detailed specifications (`prd.md`, `spec.md`).
 
 ## Roadmap
 

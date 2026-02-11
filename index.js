@@ -406,8 +406,14 @@ var getPanelHtml = (model) => {
     overflow-x: auto;
     overflow-y: hidden;
     white-space: nowrap;
-    scrollbar-width: thin;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
     background: #F4F5F6;
+  }
+  #panel-content::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
   }
   .pin-chip {
     flex: 0 0 auto;

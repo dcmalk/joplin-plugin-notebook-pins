@@ -27,6 +27,10 @@ Manual QA evidence (Windows, 2026-02-11):
 
 ## Milestone C (`v1.1`)
 
-- [ ] Implement drag reorder in panel and persisted order updates.
-- [ ] Add optional auto-migrate behavior for moved notes.
-- [ ] Add mobile-specific interaction polish and Android validation.
+- [x] Add drag-and-drop reorder in panel with persisted order updates.
+- [x] Add optional auto-migrate behavior when pinned notes move notebooks.
+- [x] Add plugin setting to toggle horizontal scrollbar visibility in the pinned strip.
+- [x] Extend storage/service/settings wiring for new `v1.1` options.
+- [x] Add unit and integration test coverage for reorder, move-migrate, and scrollbar setting behavior.
+- [x] Run Windows QA for reorder/migrate/scrollbar flows.
+- [ ] Run best-effort Android validation.

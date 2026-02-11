@@ -8,6 +8,10 @@ This plugin solves the problem of keeping key notes (like index notes or project
 
 - 📌 **Notebook-Scoped:** Pins are attached to a specific notebook. Switching notebooks automatically refreshes the list.
 - ⚡ **Fast Access:** Dedicated side panel for one-click navigation to your most important notes.
+- ↔️ **Drag Reorder:** Reorder pinned notes directly in the pinned strip.
+- 🔁 **Optional Auto-Migrate:** Keep notes pinned when moved to another notebook.
+- 🧭 **Scrollbar Preference:** Choose whether horizontal scrollbars are shown in the pinned strip.
+- 🗑️ **Trash-Safe Cleanup:** Pins are removed automatically when notes are deleted/trashed.
 - 🧹 **Clean Workflow:** Does not modify your note titles or native note list sorting.
 - 💾 **Persistent:** Pins are saved and restored across sessions.
 
@@ -15,7 +19,14 @@ This plugin solves the problem of keeping key notes (like index notes or project
 
 1.  **Pin a Note:** Right-click a note in the note list and select **"Pin in this notebook"**.
 2.  **Open:** Click any note in the "Notebook Pins" panel to open it immediately.
-3.  **Unpin:** Right-click the note again to **"Unpin from this notebook"**, or use the command palette.
+3.  **Reorder:** Drag pinned notes horizontally to reorder them.
+4.  **Unpin:** Right-click the note again to **"Unpin from this notebook"**, or use the command palette.
+
+## Settings
+
+- **Max pins per notebook**: `0` means unlimited.
+- **Auto-migrate pins when notes move notebooks**: If enabled, moved notes stay pinned in their new notebook.
+- **Show horizontal scrollbar in pinned strip**: If enabled, shows the strip scrollbar; if disabled, scrolling still works.
 
 ---
 
@@ -78,4 +89,4 @@ tar -cf .\release\com.dcmalk.notebook-pins-0.1.1-rc.1.jpl manifest.json index.js
 ## Roadmap
 
 - [x] **v1.0 (MVP):** Core pinning, panel UI, persistence.
-- [ ] **v1.1:** Drag-and-drop reordering, auto-migration when notes are moved.
+- [x] **v1.1:** Drag-and-drop reordering, auto-migration, and scrollbar preference.

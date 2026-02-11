@@ -17,6 +17,7 @@ export interface PanelRenderModel {
   folderName: string | null;
   title: string;
   emptyMessage: string;
+  showHorizontalScrollbar: boolean;
   pins: PinnedNote[];
   capabilities: {
     reorder: boolean;
@@ -27,4 +28,4 @@ export interface PanelRenderModel {
 export type PanelAction =
   | { type: 'OPEN_NOTE'; noteId: string }
   | { type: 'UNPIN_NOTE'; noteId: string; folderId: string }
-  | { type: 'REORDER_PINS'; noteIdsInOrder: string[] };
+  | { type: 'REORDER_PINS'; folderId: string; noteIdsInOrder: string[] };

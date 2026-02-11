@@ -7,6 +7,7 @@ export interface NoteEntity {
   parent_id?: string;
   is_todo?: number;
   todo_completed?: number;
+  deleted_time?: number;
 }
 
 export interface NotesAdapter {
@@ -18,6 +19,7 @@ export interface PinsRepository {
   loadState(): Promise<PinsState>;
   saveState(state: PinsState): Promise<void>;
   getMaxPins(): Promise<number>;
+  getAutoMigrateOnMove(): Promise<boolean>;
 }
 
 export interface PinResult {
@@ -88,17 +90,58 @@ export class PinsService {
     return { changed: true };
   }
 
+  async reorderPins(folderId: string, noteIdsInOrder: string[]): Promise<PinResult> {
+    if (!folderId) return { changed: false, message: 'Missing notebook context.' };
+    if (!Array.isArray(noteIdsInOrder) || noteIdsInOrder.length === 0) {
+      return { changed: false, message: 'No pinned notes to reorder.' };
+    }
+
+    const current = this.state.pinsByFolderId[folderId] ?? [];
+    if (current.length === 0) return { changed: false, message: 'No pinned notes to reorder.' };
+
+    const uniqueRequested = [...new Set(noteIdsInOrder)];
+    if (uniqueRequested.length !== noteIdsInOrder.length) {
+      return { changed: false, message: 'Invalid reorder payload.' };
+    }
+
+    if (uniqueRequested.length !== current.length) {
+      return { changed: false, message: 'Invalid reorder payload.' };
+    }
+
+    const currentSet = new Set(current);
+    if (!uniqueRequested.every((noteId) => currentSet.has(noteId))) {
+      return { changed: false, message: 'Invalid reorder payload.' };
+    }
+
+    const orderUnchanged = current.every((noteId, index) => noteId === uniqueRequested[index]);
+    if (orderUnchanged) return { changed: false };
+
+    this.state.pinsByFolderId[folderId] = uniqueRequested;
+    await this.persist();
+    return { changed: true };
+  }
+
   async listPinnedNotes(folderId: string): Promise<PinnedNote[]> {
     const noteIds = this.getPinnedIds(folderId);
     if (noteIds.length === 0) return [];
 
     const notes: PinnedNote[] = [];
     const staleNoteIds: string[] = [];
+    const migratedNoteIds: Array<{ noteId: string; toFolderId: string }> = [];
+    const autoMigrateOnMove = await this.repository.getAutoMigrateOnMove();
 
     for (const noteId of noteIds) {
       const note = await this.notesAdapter.getNote(noteId);
-      if (!note || note.parent_id !== folderId) {
+      if (!isLiveNote(note) || typeof note.parent_id !== 'string' || note.parent_id.length === 0) {
         staleNoteIds.push(noteId);
+        continue;
+      }
+      if (note.parent_id !== folderId) {
+        if (autoMigrateOnMove) {
+          migratedNoteIds.push({ noteId, toFolderId: note.parent_id });
+        } else {
+          staleNoteIds.push(noteId);
+        }
         continue;
       }
 
@@ -114,6 +157,13 @@ export class PinsService {
       for (const staleNoteId of staleNoteIds) {
         this.removePinInternal(staleNoteId, folderId);
       }
+    }
+    if (migratedNoteIds.length > 0) {
+      for (const migration of migratedNoteIds) {
+        this.movePinInternal(migration.noteId, folderId, migration.toFolderId);
+      }
+    }
+    if (staleNoteIds.length > 0 || migratedNoteIds.length > 0) {
       await this.persist();
     }
 
@@ -129,10 +179,51 @@ export class PinsService {
     if (!folderId) return;
 
     const note = await this.notesAdapter.getNote(noteId);
-    if (!note || note.parent_id !== folderId) {
+    if (!isLiveNote(note) || typeof note.parent_id !== 'string' || note.parent_id.length === 0) {
       const changed = this.removePinInternal(noteId, folderId);
       if (changed) await this.persist();
+      return;
     }
+
+    if (note.parent_id === folderId) return;
+
+    const autoMigrateOnMove = await this.repository.getAutoMigrateOnMove();
+    if (!autoMigrateOnMove) {
+      const changed = this.removePinInternal(noteId, folderId);
+      if (changed) await this.persist();
+      return;
+    }
+
+    const changed = this.movePinInternal(noteId, folderId, note.parent_id);
+    if (changed) {
+      await this.persist();
+    }
+  }
+
+  async reconcilePins(): Promise<void> {
+    const indexEntries = Object.entries(this.state.noteToFolderIndex);
+    if (indexEntries.length === 0) return;
+
+    const autoMigrateOnMove = await this.repository.getAutoMigrateOnMove();
+    let changed = false;
+
+    for (const [noteId, folderId] of indexEntries) {
+      const note = await this.notesAdapter.getNote(noteId);
+      if (!isLiveNote(note) || typeof note.parent_id !== 'string' || note.parent_id.length === 0) {
+        changed = this.removePinInternal(noteId, folderId) || changed;
+        continue;
+      }
+
+      if (note.parent_id === folderId) continue;
+      if (!autoMigrateOnMove) {
+        changed = this.removePinInternal(noteId, folderId) || changed;
+        continue;
+      }
+
+      changed = this.movePinInternal(noteId, folderId, note.parent_id) || changed;
+    }
+
+    if (changed) await this.persist();
   }
 
   private removePinInternal(noteId: string, folderId: string): boolean {
@@ -155,9 +246,32 @@ export class PinsService {
     return true;
   }
 
+  private movePinInternal(noteId: string, fromFolderId: string, toFolderId: string): boolean {
+    if (!toFolderId || fromFolderId === toFolderId) return false;
+
+    const removed = this.removePinInternal(noteId, fromFolderId);
+    if (!removed) return false;
+
+    if (!this.state.pinsByFolderId[toFolderId]) {
+      this.state.pinsByFolderId[toFolderId] = [];
+    }
+
+    if (!this.state.pinsByFolderId[toFolderId].includes(noteId)) {
+      this.state.pinsByFolderId[toFolderId].push(noteId);
+    }
+
+    this.state.noteToFolderIndex[noteId] = toFolderId;
+    return true;
+  }
+
   private async persist(): Promise<void> {
     this.state = sanitizeState(this.state);
     this.state.updatedAt = Date.now();
     await this.repository.saveState(this.state);
   }
 }
+
+const isLiveNote = (note: NoteEntity | null): note is NoteEntity => {
+  if (!note) return false;
+  return !(typeof note.deleted_time === 'number' && note.deleted_time > 0);
+};

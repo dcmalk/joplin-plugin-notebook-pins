@@ -56,7 +56,6 @@ var registerOptionalWorkspaceEvent = async (workspace, eventName, callback) => {
     await register(callback);
   } catch (error) {
     if (isUnsupportedWorkspaceEventError(error)) {
-      console.info(`Notebook Pins: skipping unsupported workspace event "${eventName}".`);
       return;
     }
     throw error;
@@ -98,6 +97,8 @@ var registerWorkspaceEvents = async (joplin2, handlers) => {
 // src/storage.ts
 var STATE_SETTING_KEY = "notebookPins.state";
 var MAX_PINS_SETTING_KEY = "notebookPins.maxPinsPerNotebook";
+var AUTO_MIGRATE_ON_MOVE_SETTING_KEY = "notebookPins.autoMigrateOnMove";
+var SHOW_HORIZONTAL_SCROLLBAR_SETTING_KEY = "notebookPins.showHorizontalScrollbar";
 var STATE_VERSION = 1;
 var createEmptyState = (now = Date.now()) => ({
   version: STATE_VERSION,
@@ -157,6 +158,19 @@ var normalizeMaxPins = (raw) => {
   if (!Number.isFinite(numberValue) || numberValue < 0) return 0;
   return Math.floor(numberValue);
 };
+var normalizeBooleanSetting = (raw) => {
+  if (typeof raw === "boolean") return raw;
+  if (typeof raw === "number") return raw !== 0;
+  if (typeof raw !== "string") return false;
+  const normalized = raw.trim().toLowerCase();
+  if (normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on") {
+    return true;
+  }
+  if (normalized === "0" || normalized === "false" || normalized === "no" || normalized === "off") {
+    return false;
+  }
+  return false;
+};
 var SettingsStateRepository = class {
   constructor(settings) {
     this.settings = settings;
@@ -173,6 +187,14 @@ var SettingsStateRepository = class {
   async getMaxPins() {
     const raw = await this.settings.value(MAX_PINS_SETTING_KEY);
     return normalizeMaxPins(raw);
+  }
+  async getAutoMigrateOnMove() {
+    const raw = await this.settings.value(AUTO_MIGRATE_ON_MOVE_SETTING_KEY);
+    return normalizeBooleanSetting(raw);
+  }
+  async getShowHorizontalScrollbar() {
+    const raw = await this.settings.value(SHOW_HORIZONTAL_SCROLLBAR_SETTING_KEY);
+    return normalizeBooleanSetting(raw);
   }
 };
 
@@ -226,15 +248,49 @@ var PinsService = class {
     await this.persist();
     return { changed: true };
   }
+  async reorderPins(folderId, noteIdsInOrder) {
+    if (!folderId) return { changed: false, message: "Missing notebook context." };
+    if (!Array.isArray(noteIdsInOrder) || noteIdsInOrder.length === 0) {
+      return { changed: false, message: "No pinned notes to reorder." };
+    }
+    const current = this.state.pinsByFolderId[folderId] ?? [];
+    if (current.length === 0) return { changed: false, message: "No pinned notes to reorder." };
+    const uniqueRequested = [...new Set(noteIdsInOrder)];
+    if (uniqueRequested.length !== noteIdsInOrder.length) {
+      return { changed: false, message: "Invalid reorder payload." };
+    }
+    if (uniqueRequested.length !== current.length) {
+      return { changed: false, message: "Invalid reorder payload." };
+    }
+    const currentSet = new Set(current);
+    if (!uniqueRequested.every((noteId) => currentSet.has(noteId))) {
+      return { changed: false, message: "Invalid reorder payload." };
+    }
+    const orderUnchanged = current.every((noteId, index) => noteId === uniqueRequested[index]);
+    if (orderUnchanged) return { changed: false };
+    this.state.pinsByFolderId[folderId] = uniqueRequested;
+    await this.persist();
+    return { changed: true };
+  }
   async listPinnedNotes(folderId) {
     const noteIds = this.getPinnedIds(folderId);
     if (noteIds.length === 0) return [];
     const notes = [];
     const staleNoteIds = [];
+    const migratedNoteIds = [];
+    const autoMigrateOnMove = await this.repository.getAutoMigrateOnMove();
     for (const noteId of noteIds) {
       const note = await this.notesAdapter.getNote(noteId);
-      if (!note || note.parent_id !== folderId) {
+      if (!isLiveNote(note) || typeof note.parent_id !== "string" || note.parent_id.length === 0) {
         staleNoteIds.push(noteId);
+        continue;
+      }
+      if (note.parent_id !== folderId) {
+        if (autoMigrateOnMove) {
+          migratedNoteIds.push({ noteId, toFolderId: note.parent_id });
+        } else {
+          staleNoteIds.push(noteId);
+        }
         continue;
       }
       notes.push({
@@ -248,6 +304,13 @@ var PinsService = class {
       for (const staleNoteId of staleNoteIds) {
         this.removePinInternal(staleNoteId, folderId);
       }
+    }
+    if (migratedNoteIds.length > 0) {
+      for (const migration of migratedNoteIds) {
+        this.movePinInternal(migration.noteId, folderId, migration.toFolderId);
+      }
+    }
+    if (staleNoteIds.length > 0 || migratedNoteIds.length > 0) {
       await this.persist();
     }
     return notes;
@@ -259,10 +322,42 @@ var PinsService = class {
     const folderId = this.state.noteToFolderIndex[noteId];
     if (!folderId) return;
     const note = await this.notesAdapter.getNote(noteId);
-    if (!note || note.parent_id !== folderId) {
-      const changed = this.removePinInternal(noteId, folderId);
-      if (changed) await this.persist();
+    if (!isLiveNote(note) || typeof note.parent_id !== "string" || note.parent_id.length === 0) {
+      const changed2 = this.removePinInternal(noteId, folderId);
+      if (changed2) await this.persist();
+      return;
     }
+    if (note.parent_id === folderId) return;
+    const autoMigrateOnMove = await this.repository.getAutoMigrateOnMove();
+    if (!autoMigrateOnMove) {
+      const changed2 = this.removePinInternal(noteId, folderId);
+      if (changed2) await this.persist();
+      return;
+    }
+    const changed = this.movePinInternal(noteId, folderId, note.parent_id);
+    if (changed) {
+      await this.persist();
+    }
+  }
+  async reconcilePins() {
+    const indexEntries = Object.entries(this.state.noteToFolderIndex);
+    if (indexEntries.length === 0) return;
+    const autoMigrateOnMove = await this.repository.getAutoMigrateOnMove();
+    let changed = false;
+    for (const [noteId, folderId] of indexEntries) {
+      const note = await this.notesAdapter.getNote(noteId);
+      if (!isLiveNote(note) || typeof note.parent_id !== "string" || note.parent_id.length === 0) {
+        changed = this.removePinInternal(noteId, folderId) || changed;
+        continue;
+      }
+      if (note.parent_id === folderId) continue;
+      if (!autoMigrateOnMove) {
+        changed = this.removePinInternal(noteId, folderId) || changed;
+        continue;
+      }
+      changed = this.movePinInternal(noteId, folderId, note.parent_id) || changed;
+    }
+    if (changed) await this.persist();
   }
   removePinInternal(noteId, folderId) {
     const noteIds = this.state.pinsByFolderId[folderId];
@@ -279,11 +374,28 @@ var PinsService = class {
     }
     return true;
   }
+  movePinInternal(noteId, fromFolderId, toFolderId) {
+    if (!toFolderId || fromFolderId === toFolderId) return false;
+    const removed = this.removePinInternal(noteId, fromFolderId);
+    if (!removed) return false;
+    if (!this.state.pinsByFolderId[toFolderId]) {
+      this.state.pinsByFolderId[toFolderId] = [];
+    }
+    if (!this.state.pinsByFolderId[toFolderId].includes(noteId)) {
+      this.state.pinsByFolderId[toFolderId].push(noteId);
+    }
+    this.state.noteToFolderIndex[noteId] = toFolderId;
+    return true;
+  }
   async persist() {
     this.state = sanitizeState(this.state);
     this.state.updatedAt = Date.now();
     await this.repository.saveState(this.state);
   }
+};
+var isLiveNote = (note) => {
+  if (!note) return false;
+  return !(typeof note.deleted_time === "number" && note.deleted_time > 0);
 };
 
 // src/panel.ts
@@ -305,6 +417,7 @@ var NotebookPinsPanel = class {
       folderName: null,
       title: "PINNED",
       emptyMessage: "Select a notebook to view pinned notes.",
+      showHorizontalScrollbar: false,
       pins: [],
       capabilities: { reorder: false }
     });
@@ -346,8 +459,8 @@ var parsePanelAction = (message) => {
   if (type === "UNPIN_NOTE" && typeof event.noteId === "string" && typeof event.folderId === "string" && event.folderId.length > 0) {
     return { type, noteId: event.noteId, folderId: event.folderId };
   }
-  if (type === "REORDER_PINS" && Array.isArray(event.noteIdsInOrder) && event.noteIdsInOrder.every((id) => typeof id === "string")) {
-    return { type, noteIdsInOrder: event.noteIdsInOrder };
+  if (type === "REORDER_PINS" && typeof event.folderId === "string" && event.folderId.length > 0 && Array.isArray(event.noteIdsInOrder) && event.noteIdsInOrder.every((id) => typeof id === "string")) {
+    return { type, folderId: event.folderId, noteIdsInOrder: event.noteIdsInOrder };
   }
   return null;
 };
@@ -355,12 +468,15 @@ var escapeHtml = (value) => value.replace(/&/g, "&amp;").replace(/</g, "&lt;").r
 var getPanelHtml = (model) => {
   const title = escapeHtml(model.title || "PINNED");
   const errorMessage = model.error ? escapeHtml(model.error) : "";
-  const pinsHtml = model.pins.length === 0 ? "" : model.pins.map((pin, index) => {
+  const folderId = typeof model.folderId === "string" ? escapeHtml(model.folderId) : "";
+  const contentClass = model.showHorizontalScrollbar ? "scroll-visible" : "scroll-hidden";
+  const pinsHtml = model.pins.length === 0 ? "" : model.pins.map((pin) => {
     const noteId = escapeHtml(pin.noteId);
     const noteTitle = escapeHtml(pin.title);
     const todoPrefix = pin.isTodo ? "[ ] " : "";
-    const separator = index > 0 ? `<span class="pin-sep" aria-hidden="true"></span>` : "";
-    return `${separator}<button type="button" class="pin-chip" data-action="open" data-note-id="${noteId}" title="${noteTitle}"><span class="item-icon">&#128196;&#65038;</span><span class="pin-label">${todoPrefix}${noteTitle}</span></button>`;
+    const draggable = model.capabilities.reorder ? ' draggable="true"' : "";
+    const reorderFlag = model.capabilities.reorder ? "1" : "0";
+    return `<button type="button" class="pin-chip" data-action="open" data-note-id="${noteId}" data-reorder="${reorderFlag}" title="${noteTitle}"${draggable}><span class="item-icon">&#128196;&#65038;</span><span class="pin-label">${todoPrefix}${noteTitle}</span></button>`;
   }).join("");
   return `
 <style>
@@ -406,11 +522,31 @@ var getPanelHtml = (model) => {
     overflow-x: auto;
     overflow-y: hidden;
     white-space: nowrap;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
     background: #F4F5F6;
   }
-  #panel-content::-webkit-scrollbar {
+  #panel-content.scroll-visible {
+    scrollbar-width: auto;
+    -ms-overflow-style: auto;
+    min-height: 28px;
+  }
+  #panel-content.scroll-visible::-webkit-scrollbar {
+    height: 8px;
+  }
+  #panel-content.scroll-visible::-webkit-scrollbar-track {
+    background: #e5e8ec;
+  }
+  #panel-content.scroll-visible::-webkit-scrollbar-thumb {
+    background: #b5bfcc;
+    border-radius: 999px;
+  }
+  #panel-content.scroll-visible::-webkit-scrollbar-thumb:hover {
+    background: #97a6b9;
+  }
+  #panel-content.scroll-hidden {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  #panel-content.scroll-hidden::-webkit-scrollbar {
     width: 0;
     height: 0;
     display: none;
@@ -437,9 +573,37 @@ var getPanelHtml = (model) => {
     font: inherit;
     line-height: 1;
     cursor: pointer;
+    position: relative;
+  }
+  .pin-chip[data-reorder="1"] {
+    cursor: grab;
+  }
+  .pin-chip[data-reorder="1"]:active {
+    cursor: grabbing;
   }
   .pin-chip:hover {
     background: #CBDAF1;
+  }
+  .pin-chip + .pin-chip {
+    margin-left: 8px;
+  }
+  .pin-chip + .pin-chip::before {
+    content: '';
+    position: absolute;
+    left: -4px;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: rgba(98, 113, 132, 0.45);
+  }
+  .pin-chip.dragging {
+    opacity: 0.65;
+  }
+  .pin-chip.drop-before {
+    box-shadow: inset 2px 0 0 #8faed6;
+  }
+  .pin-chip.drop-after {
+    box-shadow: inset -2px 0 0 #8faed6;
   }
   .pin-chip:focus-visible {
     outline: 1px solid #8faed6;
@@ -456,13 +620,6 @@ var getPanelHtml = (model) => {
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .pin-sep {
-    align-self: stretch;
-    flex: 0 0 1px;
-    width: 1px;
-    margin: 0 4px;
-    background: rgba(98, 113, 132, 0.45);
-  }
   .error {
     margin-top: 6px;
     padding: 4px 6px;
@@ -475,7 +632,7 @@ var getPanelHtml = (model) => {
 </style>
 <div class="strip">
   <span class="strip-title"><span class="banner-icon">&#128204;&#65038;</span><span>${title}</span></span>
-  <div id="panel-content">${pinsHtml}</div>
+  <div id="panel-content" class="${contentClass}" data-folder-id="${folderId}">${pinsHtml}</div>
 </div>
 ${errorMessage ? `<div class="error">${errorMessage}</div>` : ""}`;
 };
@@ -527,11 +684,16 @@ var getPrimarySelectedNoteId = async () => {
   if (selected && typeof selected.id === "string") return selected.id;
   return null;
 };
+var isUnsupportedSettingsEventError = (error) => {
+  if (!(error instanceof Error)) return false;
+  const message = error.message.toLowerCase();
+  return message.includes("property or method") && message.includes("does not exist");
+};
 var createNotesAdapter = () => ({
   getNote: async (noteId) => {
     try {
       return await joplinApi.data.get(["notes", noteId], {
-        fields: ["id", "title", "parent_id", "is_todo", "todo_completed"]
+        fields: ["id", "title", "parent_id", "is_todo", "todo_completed", "deleted_time"]
       });
     } catch {
       return null;
@@ -562,6 +724,20 @@ joplinApi.plugins.register({
         value: 0,
         label: "Max pins per notebook",
         description: "Set to 0 for unlimited."
+      },
+      [AUTO_MIGRATE_ON_MOVE_SETTING_KEY]: {
+        public: true,
+        section: SETTINGS_SECTION,
+        type: SettingItemType.Bool,
+        value: false,
+        label: "Auto-migrate pins when notes move notebooks"
+      },
+      [SHOW_HORIZONTAL_SCROLLBAR_SETTING_KEY]: {
+        public: true,
+        section: SETTINGS_SECTION,
+        type: SettingItemType.Bool,
+        value: false,
+        label: "Show horizontal scrollbar in pinned strip"
       }
     });
     const repository = new SettingsStateRepository({
@@ -584,12 +760,14 @@ joplinApi.plugins.register({
         return;
       }
       if (action.type === "REORDER_PINS") {
-        await showUserMessage("Reordering is planned for v1.1.");
+        await service.reorderPins(action.folderId, action.noteIdsInOrder);
+        await refreshPanel();
       }
     });
     await panel.init();
     refreshPanel = async () => {
       try {
+        await service.reconcilePins();
         const folder = await getSelectedFolder();
         if (!folder) {
           const model2 = {
@@ -597,20 +775,25 @@ joplinApi.plugins.register({
             folderName: null,
             title: "PINNED",
             emptyMessage: "Select a notebook to view pinned notes.",
+            showHorizontalScrollbar: false,
             pins: [],
             capabilities: { reorder: false }
           };
           await panel.render(model2);
           return;
         }
-        const pinnedNotes = await service.listPinnedNotes(folder.id);
+        const [pinnedNotes, showHorizontalScrollbar] = await Promise.all([
+          service.listPinnedNotes(folder.id),
+          repository.getShowHorizontalScrollbar()
+        ]);
         const model = {
           folderId: folder.id,
           folderName: folder.title,
           title: "PINNED",
           emptyMessage: "Right-click a note \u2192 Pin in this notebook.",
+          showHorizontalScrollbar,
           pins: pinnedNotes,
-          capabilities: { reorder: false }
+          capabilities: { reorder: true }
         };
         await panel.render(model);
       } catch (error) {
@@ -619,6 +802,7 @@ joplinApi.plugins.register({
           folderName: null,
           title: "PINNED",
           emptyMessage: "Unable to render pinned notes right now.",
+          showHorizontalScrollbar: false,
           pins: [],
           capabilities: { reorder: false },
           error: error instanceof Error ? error.message : "Unknown error"
@@ -668,6 +852,20 @@ joplinApi.plugins.register({
         await service.handleNoteChange(noteId);
       }
     });
+    if (typeof joplinApi.settings?.onChange === "function") {
+      try {
+        await joplinApi.settings.onChange(async (event) => {
+          const changedKeys = Array.isArray(event?.keys) ? event.keys : [];
+          if (changedKeys.length === 0 || changedKeys.includes(SHOW_HORIZONTAL_SCROLLBAR_SETTING_KEY)) {
+            await refreshPanel();
+          }
+        });
+      } catch (error) {
+        if (!isUnsupportedSettingsEventError(error)) {
+          throw error;
+        }
+      }
+    }
     await refreshPanel();
   }
 });

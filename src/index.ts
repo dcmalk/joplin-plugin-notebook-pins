@@ -6,7 +6,9 @@ import { registerWorkspaceEvents } from './events';
 import { NoteEntity, PinsService } from './pins-service';
 import { NotebookPinsPanel } from './panel';
 import {
+  AUTO_MIGRATE_ON_MOVE_SETTING_KEY,
   MAX_PINS_SETTING_KEY,
+  SHOW_HORIZONTAL_SCROLLBAR_SETTING_KEY,
   SettingsStateRepository,
   STATE_SETTING_KEY,
 } from './storage';
@@ -70,11 +72,17 @@ const getPrimarySelectedNoteId = async (): Promise<string | null> => {
   return null;
 };
 
+const isUnsupportedSettingsEventError = (error: unknown): boolean => {
+  if (!(error instanceof Error)) return false;
+  const message = error.message.toLowerCase();
+  return message.includes('property or method') && message.includes('does not exist');
+};
+
 const createNotesAdapter = () => ({
   getNote: async (noteId: string): Promise<NoteEntity | null> => {
     try {
       return (await joplinApi.data.get(['notes', noteId], {
-        fields: ['id', 'title', 'parent_id', 'is_todo', 'todo_completed'],
+        fields: ['id', 'title', 'parent_id', 'is_todo', 'todo_completed', 'deleted_time'],
       })) as NoteEntity;
     } catch {
       return null;
@@ -108,6 +116,20 @@ joplinApi.plugins.register({
         label: 'Max pins per notebook',
         description: 'Set to 0 for unlimited.',
       },
+      [AUTO_MIGRATE_ON_MOVE_SETTING_KEY]: {
+        public: true,
+        section: SETTINGS_SECTION,
+        type: SettingItemType.Bool,
+        value: false,
+        label: 'Auto-migrate pins when notes move notebooks',
+      },
+      [SHOW_HORIZONTAL_SCROLLBAR_SETTING_KEY]: {
+        public: true,
+        section: SETTINGS_SECTION,
+        type: SettingItemType.Bool,
+        value: false,
+        label: 'Show horizontal scrollbar in pinned strip',
+      },
     });
 
     const repository = new SettingsStateRepository({
@@ -132,7 +154,8 @@ joplinApi.plugins.register({
       }
 
       if (action.type === 'REORDER_PINS') {
-        await showUserMessage('Reordering is planned for v1.1.');
+        await service.reorderPins(action.folderId, action.noteIdsInOrder);
+        await refreshPanel();
       }
     });
 
@@ -140,6 +163,8 @@ joplinApi.plugins.register({
 
     refreshPanel = async (): Promise<void> => {
       try {
+        await service.reconcilePins();
+
         const folder = await getSelectedFolder();
         if (!folder) {
           const model: PanelRenderModel = {
@@ -147,6 +172,7 @@ joplinApi.plugins.register({
             folderName: null,
             title: 'PINNED',
             emptyMessage: 'Select a notebook to view pinned notes.',
+            showHorizontalScrollbar: false,
             pins: [],
             capabilities: { reorder: false },
           };
@@ -154,14 +180,18 @@ joplinApi.plugins.register({
           return;
         }
 
-        const pinnedNotes = await service.listPinnedNotes(folder.id);
+        const [pinnedNotes, showHorizontalScrollbar] = await Promise.all([
+          service.listPinnedNotes(folder.id),
+          repository.getShowHorizontalScrollbar(),
+        ]);
         const model: PanelRenderModel = {
           folderId: folder.id,
           folderName: folder.title,
           title: 'PINNED',
           emptyMessage: 'Right-click a note → Pin in this notebook.',
+          showHorizontalScrollbar,
           pins: pinnedNotes,
-          capabilities: { reorder: false },
+          capabilities: { reorder: true },
         };
         await panel.render(model);
       } catch (error) {
@@ -170,6 +200,7 @@ joplinApi.plugins.register({
           folderName: null,
           title: 'PINNED',
           emptyMessage: 'Unable to render pinned notes right now.',
+          showHorizontalScrollbar: false,
           pins: [],
           capabilities: { reorder: false },
           error: error instanceof Error ? error.message : 'Unknown error',
@@ -225,6 +256,24 @@ joplinApi.plugins.register({
         await service.handleNoteChange(noteId);
       },
     });
+
+    if (typeof joplinApi.settings?.onChange === 'function') {
+      try {
+        await joplinApi.settings.onChange(async (event: { keys?: string[] }) => {
+          const changedKeys = Array.isArray(event?.keys) ? event.keys : [];
+          if (
+            changedKeys.length === 0 ||
+            changedKeys.includes(SHOW_HORIZONTAL_SCROLLBAR_SETTING_KEY)
+          ) {
+            await refreshPanel();
+          }
+        });
+      } catch (error) {
+        if (!isUnsupportedSettingsEventError(error)) {
+          throw error;
+        }
+      }
+    }
 
     await refreshPanel();
   },

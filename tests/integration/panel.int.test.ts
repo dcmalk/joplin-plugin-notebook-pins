@@ -29,11 +29,14 @@ describe('panel wiring', () => {
       folderName: 'Folder A',
       title: 'Pinned in "Folder A"',
       emptyMessage: 'Right-click a note -> Pin in this notebook.',
+      showHorizontalScrollbar: true,
       pins: [],
       capabilities: { reorder: false },
     });
     expect(setHtml).toHaveBeenCalledTimes(2);
     expect(addScript).toHaveBeenCalledTimes(2);
+    const setHtmlCalls = setHtml.mock.calls as unknown as Array<[string, string]>;
+    expect(setHtmlCalls[1]?.[1]).toContain('class="scroll-visible"');
 
     expect(messageCb).toBeTruthy();
     if (!messageCb) {
@@ -42,7 +45,7 @@ describe('panel wiring', () => {
 
     await messageCb({ type: 'OPEN_NOTE', noteId: 'note1' });
     await messageCb({ type: 'UNPIN_NOTE', noteId: 'note2', folderId: 'folderA' });
-    await messageCb({ type: 'REORDER_PINS', noteIdsInOrder: ['note3', 'note4'] });
+    await messageCb({ type: 'REORDER_PINS', folderId: 'folderA', noteIdsInOrder: ['note3', 'note4'] });
     await messageCb({ type: 'UNKNOWN' });
 
     expect(onAction).toHaveBeenCalledTimes(3);
@@ -54,6 +57,7 @@ describe('panel wiring', () => {
     });
     expect(onAction).toHaveBeenNthCalledWith(3, {
       type: 'REORDER_PINS',
+      folderId: 'folderA',
       noteIdsInOrder: ['note3', 'note4'],
     });
   });

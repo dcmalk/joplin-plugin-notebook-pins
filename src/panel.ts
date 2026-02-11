@@ -28,6 +28,7 @@ export class NotebookPinsPanel {
       folderName: null,
       title: 'PINNED',
       emptyMessage: 'Select a notebook to view pinned notes.',
+      showHorizontalScrollbar: false,
       pins: [],
       capabilities: { reorder: false },
     });
@@ -85,10 +86,12 @@ const parsePanelAction = (message: unknown): PanelAction | null => {
   }
   if (
     type === 'REORDER_PINS' &&
+    typeof event.folderId === 'string' &&
+    event.folderId.length > 0 &&
     Array.isArray(event.noteIdsInOrder) &&
     event.noteIdsInOrder.every((id) => typeof id === 'string')
   ) {
-    return { type, noteIdsInOrder: event.noteIdsInOrder };
+    return { type, folderId: event.folderId, noteIdsInOrder: event.noteIdsInOrder };
   }
 
   return null;
@@ -105,16 +108,19 @@ const escapeHtml = (value: string): string =>
 const getPanelHtml = (model: PanelRenderModel): string => {
   const title = escapeHtml(model.title || 'PINNED');
   const errorMessage = model.error ? escapeHtml(model.error) : '';
+  const folderId = typeof model.folderId === 'string' ? escapeHtml(model.folderId) : '';
+  const contentClass = model.showHorizontalScrollbar ? 'scroll-visible' : 'scroll-hidden';
   const pinsHtml =
     model.pins.length === 0
       ? ''
       : model.pins
-          .map((pin, index) => {
+          .map((pin) => {
             const noteId = escapeHtml(pin.noteId);
             const noteTitle = escapeHtml(pin.title);
             const todoPrefix = pin.isTodo ? '[ ] ' : '';
-            const separator = index > 0 ? `<span class="pin-sep" aria-hidden="true"></span>` : '';
-            return `${separator}<button type="button" class="pin-chip" data-action="open" data-note-id="${noteId}" title="${noteTitle}"><span class="item-icon">&#128196;&#65038;</span><span class="pin-label">${todoPrefix}${noteTitle}</span></button>`;
+            const draggable = model.capabilities.reorder ? ' draggable="true"' : '';
+            const reorderFlag = model.capabilities.reorder ? '1' : '0';
+            return `<button type="button" class="pin-chip" data-action="open" data-note-id="${noteId}" data-reorder="${reorderFlag}" title="${noteTitle}"${draggable}><span class="item-icon">&#128196;&#65038;</span><span class="pin-label">${todoPrefix}${noteTitle}</span></button>`;
           })
           .join('');
 
@@ -162,11 +168,31 @@ const getPanelHtml = (model: PanelRenderModel): string => {
     overflow-x: auto;
     overflow-y: hidden;
     white-space: nowrap;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
     background: #F4F5F6;
   }
-  #panel-content::-webkit-scrollbar {
+  #panel-content.scroll-visible {
+    scrollbar-width: auto;
+    -ms-overflow-style: auto;
+    min-height: 28px;
+  }
+  #panel-content.scroll-visible::-webkit-scrollbar {
+    height: 8px;
+  }
+  #panel-content.scroll-visible::-webkit-scrollbar-track {
+    background: #e5e8ec;
+  }
+  #panel-content.scroll-visible::-webkit-scrollbar-thumb {
+    background: #b5bfcc;
+    border-radius: 999px;
+  }
+  #panel-content.scroll-visible::-webkit-scrollbar-thumb:hover {
+    background: #97a6b9;
+  }
+  #panel-content.scroll-hidden {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  #panel-content.scroll-hidden::-webkit-scrollbar {
     width: 0;
     height: 0;
     display: none;
@@ -193,9 +219,37 @@ const getPanelHtml = (model: PanelRenderModel): string => {
     font: inherit;
     line-height: 1;
     cursor: pointer;
+    position: relative;
+  }
+  .pin-chip[data-reorder="1"] {
+    cursor: grab;
+  }
+  .pin-chip[data-reorder="1"]:active {
+    cursor: grabbing;
   }
   .pin-chip:hover {
     background: #CBDAF1;
+  }
+  .pin-chip + .pin-chip {
+    margin-left: 8px;
+  }
+  .pin-chip + .pin-chip::before {
+    content: '';
+    position: absolute;
+    left: -4px;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: rgba(98, 113, 132, 0.45);
+  }
+  .pin-chip.dragging {
+    opacity: 0.65;
+  }
+  .pin-chip.drop-before {
+    box-shadow: inset 2px 0 0 #8faed6;
+  }
+  .pin-chip.drop-after {
+    box-shadow: inset -2px 0 0 #8faed6;
   }
   .pin-chip:focus-visible {
     outline: 1px solid #8faed6;
@@ -212,13 +266,6 @@ const getPanelHtml = (model: PanelRenderModel): string => {
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .pin-sep {
-    align-self: stretch;
-    flex: 0 0 1px;
-    width: 1px;
-    margin: 0 4px;
-    background: rgba(98, 113, 132, 0.45);
-  }
   .error {
     margin-top: 6px;
     padding: 4px 6px;
@@ -231,7 +278,7 @@ const getPanelHtml = (model: PanelRenderModel): string => {
 </style>
 <div class="strip">
   <span class="strip-title"><span class="banner-icon">&#128204;&#65038;</span><span>${title}</span></span>
-  <div id="panel-content">${pinsHtml}</div>
+  <div id="panel-content" class="${contentClass}" data-folder-id="${folderId}">${pinsHtml}</div>
 </div>
 ${errorMessage ? `<div class="error">${errorMessage}</div>` : ''}`;
 };

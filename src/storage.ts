@@ -2,6 +2,8 @@ import { PinsState } from './types';
 
 export const STATE_SETTING_KEY = 'notebookPins.state';
 export const MAX_PINS_SETTING_KEY = 'notebookPins.maxPinsPerNotebook';
+export const AUTO_MIGRATE_ON_MOVE_SETTING_KEY = 'notebookPins.autoMigrateOnMove';
+export const SHOW_HORIZONTAL_SCROLLBAR_SETTING_KEY = 'notebookPins.showHorizontalScrollbar';
 
 export interface SettingsAdapter {
   value(key: string): Promise<unknown>;
@@ -95,6 +97,22 @@ export const normalizeMaxPins = (raw: unknown): number => {
   return Math.floor(numberValue);
 };
 
+export const normalizeBooleanSetting = (raw: unknown): boolean => {
+  if (typeof raw === 'boolean') return raw;
+  if (typeof raw === 'number') return raw !== 0;
+  if (typeof raw !== 'string') return false;
+
+  const normalized = raw.trim().toLowerCase();
+  if (normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on') {
+    return true;
+  }
+  if (normalized === '0' || normalized === 'false' || normalized === 'no' || normalized === 'off') {
+    return false;
+  }
+
+  return false;
+};
+
 export class SettingsStateRepository {
   constructor(private readonly settings: SettingsAdapter) {}
 
@@ -112,5 +130,15 @@ export class SettingsStateRepository {
   async getMaxPins(): Promise<number> {
     const raw = await this.settings.value(MAX_PINS_SETTING_KEY);
     return normalizeMaxPins(raw);
+  }
+
+  async getAutoMigrateOnMove(): Promise<boolean> {
+    const raw = await this.settings.value(AUTO_MIGRATE_ON_MOVE_SETTING_KEY);
+    return normalizeBooleanSetting(raw);
+  }
+
+  async getShowHorizontalScrollbar(): Promise<boolean> {
+    const raw = await this.settings.value(SHOW_HORIZONTAL_SCROLLBAR_SETTING_KEY);
+    return normalizeBooleanSetting(raw);
   }
 }

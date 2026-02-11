@@ -17,8 +17,6 @@ This spec converts `prd.md` into concrete technical behavior for MVP (`v1`) and 
 
 ### Deferred (`v1.1+`)
 
-- Drag-and-drop reorder in panel.
-- Auto-migrate pin when note moves to another notebook (optional setting).
 - Search/filter inside pinned panel.
 
 ### Out of Scope
@@ -120,6 +118,12 @@ Empty states:
   - no notebook is selected
   - current notebook has zero pins
 
+Overflow behavior:
+
+- Pinned strip supports horizontal overflow scrolling for long pin lists.
+- `v1` default keeps scrollbars hidden while preserving horizontal scroll functionality.
+- `v1.1` adds a user-facing setting to force visible horizontal scrollbars.
+
 List item fields (`v1`):
 
 - Leading document icon (`📄︎`)
@@ -129,6 +133,7 @@ List item fields (`v1`):
 Webview action events to host:
 
 - `OPEN_NOTE` with `{ noteId }`
+- `REORDER_PINS` with `{ folderId, noteIdsInOrder }`
 
 Panel unpin behavior:
 
@@ -151,7 +156,7 @@ Render payload host to webview:
     }
   ],
   "capabilities": {
-    "reorder": false
+    "reorder": true
   }
 }
 ```
@@ -212,9 +217,10 @@ Corrupt state JSON:
 
 - `notebookPins.maxPinsPerNotebook` (integer, default `0`, where `0` means unlimited)
 
-`v1.1` settings (planned):
+`v1.1` settings:
 
 - `notebookPins.autoMigrateOnMove` (boolean, default `false`)
+- `notebookPins.showHorizontalScrollbar` (boolean, default `false`)
 
 Setting enforcement:
 
@@ -233,6 +239,8 @@ Integration tests (mocked Joplin API):
 - Notebook switch rerenders correct pin list.
 - Panel action events call expected commands/service methods.
 - Persistence reload reproduces previous state.
+- Reorder action persists expected note order and ignores invalid payloads.
+- Scrollbar visibility setting is reflected in rendered panel output.
 
 Manual QA checklist:
 
@@ -264,6 +272,7 @@ Manual QA checklist:
 
 - Reorder support in UI + persisted order updates
 - Optional auto-migrate on move
+- Optional horizontal scrollbar visibility setting
 
 ## 12. Open Decisions
 

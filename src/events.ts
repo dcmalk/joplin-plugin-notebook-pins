@@ -29,7 +29,6 @@ const registerOptionalWorkspaceEvent = async (
     await register(callback);
   } catch (error) {
     if (isUnsupportedWorkspaceEventError(error)) {
-      console.info(`Notebook Pins: skipping unsupported workspace event "${eventName}".`);
       return;
     }
     throw error;

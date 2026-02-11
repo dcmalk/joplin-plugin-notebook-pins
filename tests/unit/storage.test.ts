@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import {
   createEmptyState,
+  normalizeBooleanSetting,
   normalizeMaxPins,
   parseStoredState,
   sanitizeState,
@@ -45,5 +46,15 @@ describe('storage', () => {
     expect(normalizeMaxPins(undefined)).toBe(0);
     expect(normalizeMaxPins(-1)).toBe(0);
     expect(normalizeMaxPins('4')).toBe(4);
+  });
+
+  test('normalizeBooleanSetting handles common truthy/falsey values', () => {
+    expect(normalizeBooleanSetting(true)).toBe(true);
+    expect(normalizeBooleanSetting(false)).toBe(false);
+    expect(normalizeBooleanSetting('true')).toBe(true);
+    expect(normalizeBooleanSetting('1')).toBe(true);
+    expect(normalizeBooleanSetting('false')).toBe(false);
+    expect(normalizeBooleanSetting('0')).toBe(false);
+    expect(normalizeBooleanSetting(undefined)).toBe(false);
   });
 });

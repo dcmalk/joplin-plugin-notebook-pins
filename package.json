@@ -3,13 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "description": "Notebook-aware pinned notes plugin for Joplin",
+  "main": "index.js",
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && npm run build:bundle",
+    "build:bundle": "esbuild src/index.ts --bundle --platform=node --format=cjs --target=node18 --external:api --external:api/types --outfile=index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
+    "esbuild": "^0.25.10",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
   }

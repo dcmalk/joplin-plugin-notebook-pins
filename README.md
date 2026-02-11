@@ -41,15 +41,45 @@ npm run build
 
 Expected output:
 
-- `dist/index.js` (Joplin development loader entrypoint)
+- `index.js` (Joplin plugin entrypoint)
+- `dist/panel-webview.js` (panel webview client script)
 
 ## Using in Joplin (Development)
 
 This repository is currently intended for development loading.
 
-1. Build the plugin (`npm run build`) and confirm `dist/index.js` exists.
+1. Build the plugin (`npm run build`) and confirm `index.js` exists.
 2. In Joplin Desktop, open plugin advanced settings and set the development plugin path to this repository.
 3. Restart Joplin and enable the plugin.
+
+## Packaging (.jpl)
+
+To distribute/install without using a development path, create a `.jpl` package.
+
+1. Build the plugin:
+
+```powershell
+npm run build
+```
+
+2. Create the package (PowerShell):
+
+```powershell
+New-Item -ItemType Directory -Path .\release -Force | Out-Null
+tar -cf .\release\com.thirdorbitlabs.notebook-pins-0.1.1-rc.1.jpl manifest.json index.js dist README.md
+```
+
+3. Install in Joplin:
+ - Open `Tools -> Options -> Plugins`
+ - Choose `Install from file`
+ - Select the `.jpl` from `.\release`
+ - Restart Joplin
+
+## Release Artifacts
+
+- Keep `.jpl` files in `.\release` as local build artifacts during development.
+- Do not commit generated `.jpl` files to the main source tree unless you intentionally version binaries.
+- Preferred distribution flow: create the `.jpl` locally/CI and attach it to a GitHub Release.
 
 ## Contributing
 

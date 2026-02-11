@@ -3,6 +3,7 @@ import { PanelAction, PanelRenderModel } from './types';
 interface PanelAdapter {
   create(id: string): Promise<string>;
   setHtml(handle: string, html: string): Promise<void>;
+  addScript(handle: string, scriptPath: string): Promise<void>;
   onMessage(handle: string, callback: (message: unknown) => Promise<void>): Promise<void>;
 }
 
@@ -21,6 +22,7 @@ export class NotebookPinsPanel {
       if (!action) return;
       await this.onAction(action);
     });
+
     await this.render({
       folderId: null,
       folderName: null,
@@ -34,8 +36,27 @@ export class NotebookPinsPanel {
   async render(model: PanelRenderModel): Promise<void> {
     if (!this.handle) return;
     await this.panelAdapter.setHtml(this.handle, getPanelHtml(model));
+    await addPanelScript(this.panelAdapter, this.handle);
   }
 }
+
+const addPanelScript = async (panelAdapter: PanelAdapter, handle: string): Promise<void> => {
+  const candidates = ['./dist/panel-webview.js'];
+
+  let lastError: unknown = null;
+  for (const candidate of candidates) {
+    try {
+      await panelAdapter.addScript(handle, candidate);
+      return;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError instanceof Error
+    ? new Error(`Unable to load panel webview script: ${lastError.message}`)
+    : new Error('Unable to load panel webview script.');
+};
 
 const parsePanelAction = (message: unknown): PanelAction | null => {
   let payload: unknown = message;
@@ -98,6 +119,7 @@ const getPanelHtml = (model: PanelRenderModel): string => {
             const unpinAttrs = folderId
               ? `data-action="unpin" data-note-id="${noteId}" data-folder-id="${folderId}"`
               : 'disabled';
+
             return `<li>
               <span class="title">${todoPrefix}${noteTitle}</span>
               <span class="actions">
@@ -108,114 +130,65 @@ const getPanelHtml = (model: PanelRenderModel): string => {
           })
           .join('')}</ul>`;
 
-  return `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <style>
-      :root {
-        color-scheme: light dark;
-      }
-      body {
-        margin: 0;
-        padding: 12px;
-        font: 13px/1.4 sans-serif;
-      }
-      h2 {
-        margin: 0 0 10px;
-        font-size: 14px;
-      }
-      .empty {
-        opacity: 0.8;
-      }
-      .error {
-        margin: 0 0 10px;
-        padding: 8px;
-        border: 1px solid #d14343;
-        border-radius: 4px;
-        background: rgba(209, 67, 67, 0.1);
-        color: #d14343;
-      }
-      ul {
-        list-style: none;
-        margin: 0;
-        padding: 0;
-      }
-      li {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 8px;
-        padding: 8px 0;
-        border-bottom: 1px solid rgba(127, 127, 127, 0.25);
-      }
-      .title {
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-      .todo {
-        margin-right: 4px;
-      }
-      .actions {
-        display: inline-flex;
-        gap: 6px;
-        flex-shrink: 0;
-      }
-      button {
-        font: inherit;
-      }
-    </style>
-  </head>
-  <body>
-    <h2>${title}</h2>
-    ${errorMessage ? `<div id="error" class="error">${errorMessage}</div>` : ''}
-    <div id="content">${pinsHtml}</div>
-    <script>
-      const getWebviewApi = () => {
-        if (typeof webviewApi !== 'undefined' && webviewApi) return webviewApi;
-        if (typeof window !== 'undefined' && window.webviewApi) return window.webviewApi;
-        return null;
-      };
-      const api = getWebviewApi();
-
-      const post = (event) => {
-        if (api && typeof api.postMessage === 'function') {
-          api.postMessage(event);
-        }
-      };
-
-      if (!api || typeof api.postMessage !== 'function') {
-        const content = document.getElementById('content');
-        if (content) {
-          const warning = document.createElement('div');
-          warning.className = 'error';
-          warning.textContent = 'Panel actions are unavailable: webview bridge not found.';
-          content.prepend(warning);
-        }
-      }
-
-      const buttons = document.querySelectorAll('button[data-action]');
-      buttons.forEach((button) => {
-        button.addEventListener('click', () => {
-          const action = button.getAttribute('data-action');
-          if (action === 'open') {
-            const noteId = button.getAttribute('data-note-id');
-            if (noteId) post({ type: 'OPEN_NOTE', noteId });
-            return;
-          }
-
-          if (action === 'unpin') {
-            const noteId = button.getAttribute('data-note-id');
-            const currentFolderId = button.getAttribute('data-folder-id');
-            if (noteId && currentFolderId) {
-              post({ type: 'UNPIN_NOTE', noteId, folderId: currentFolderId });
-            }
-          }
-        });
-      });
-    </script>
-  </body>
-</html>`;
+  return `
+<style>
+  :root {
+    color-scheme: light dark;
+  }
+  body {
+    margin: 0;
+    padding: 12px;
+    font: 13px/1.4 sans-serif;
+  }
+  h2 {
+    margin: 0 0 10px;
+    font-size: 14px;
+  }
+  .empty {
+    opacity: 0.8;
+  }
+  .error {
+    margin: 0 0 10px;
+    padding: 8px;
+    border: 1px solid #d14343;
+    border-radius: 4px;
+    background: rgba(209, 67, 67, 0.1);
+    color: #d14343;
+  }
+  .bridge-status {
+    font-size: 11px;
+    opacity: 0.7;
+    margin: 0 0 8px;
+  }
+  ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(127, 127, 127, 0.25);
+  }
+  .title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .actions {
+    display: inline-flex;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  button {
+    font: inherit;
+  }
+</style>
+<h2 id="panel-title">${title}</h2>
+<div id="bridge-status" class="bridge-status">Bridge: pending</div>
+${errorMessage ? `<div class="error">${errorMessage}</div>` : ''}
+<div id="panel-content">${pinsHtml}</div>`;
 };

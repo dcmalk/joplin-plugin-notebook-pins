@@ -4,11 +4,16 @@ import { NotebookPinsPanel } from '../../src/panel';
 describe('panel wiring', () => {
   test('renders and forwards valid panel actions to host', async () => {
     const setHtml = vi.fn(async () => undefined);
+    const addScript = vi.fn(async () => undefined);
+    let messageCb: ((message: unknown) => Promise<void>) | undefined;
 
     const panelAdapter = {
       create: vi.fn(async () => 'handle-1'),
       setHtml,
-      onMessage: vi.fn(async (_handle: string, _cb: (message: unknown) => Promise<void>) => undefined),
+      addScript,
+      onMessage: vi.fn(async (_handle: string, cb: (message: unknown) => Promise<void>) => {
+        messageCb = cb;
+      }),
     };
 
     const onAction = vi.fn(async () => undefined);
@@ -17,6 +22,7 @@ describe('panel wiring', () => {
     await panel.init();
     expect(panelAdapter.create).toHaveBeenCalledWith('notebookPins.panel');
     expect(setHtml).toHaveBeenCalledTimes(1);
+    expect(addScript).toHaveBeenCalledWith('handle-1', './dist/panel-webview.js');
 
     await panel.render({
       folderId: 'folderA',
@@ -27,10 +33,8 @@ describe('panel wiring', () => {
       capabilities: { reorder: false },
     });
     expect(setHtml).toHaveBeenCalledTimes(2);
+    expect(addScript).toHaveBeenCalledTimes(2);
 
-    const messageCb = panelAdapter.onMessage.mock.calls[0]?.[1] as
-      | ((message: unknown) => Promise<void>)
-      | undefined;
     expect(messageCb).toBeTruthy();
     if (!messageCb) {
       throw new Error('Expected panel onMessage callback.');

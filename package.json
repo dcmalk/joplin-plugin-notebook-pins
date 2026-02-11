@@ -5,8 +5,9 @@
   "description": "Notebook-aware pinned notes plugin for Joplin",
   "main": "index.js",
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && npm run build:bundle",
+    "build": "tsc -p tsconfig.build.json && npm run build:bundle && npm run build:webview",
     "build:bundle": "esbuild src/index.ts --bundle --platform=node --format=cjs --target=node18 --external:api --external:api/types --outfile=index.js",
+    "build:webview": "esbuild src/panel-webview.ts --bundle --platform=browser --format=iife --target=es2020 --outfile=dist/panel-webview.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },

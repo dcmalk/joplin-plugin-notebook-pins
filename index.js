@@ -44,6 +44,24 @@ var debounce = (callback, waitMs) => {
     timeout = setTimeout(callback, waitMs);
   };
 };
+var isUnsupportedWorkspaceEventError = (error) => {
+  if (!(error instanceof Error)) return false;
+  const message = error.message.toLowerCase();
+  return message.includes("property or method") && message.includes("does not exist");
+};
+var registerOptionalWorkspaceEvent = async (workspace, eventName, callback) => {
+  const register = workspace?.[eventName];
+  if (typeof register !== "function") return;
+  try {
+    await register(callback);
+  } catch (error) {
+    if (isUnsupportedWorkspaceEventError(error)) {
+      console.info(`Notebook Pins: skipping unsupported workspace event "${eventName}".`);
+      return;
+    }
+    throw error;
+  }
+};
 var registerWorkspaceEvents = async (joplin2, handlers) => {
   const debouncedRefresh = debounce(() => {
     void handlers.refresh();
@@ -51,24 +69,30 @@ var registerWorkspaceEvents = async (joplin2, handlers) => {
   await joplin2.workspace.onNoteSelectionChange(async () => {
     debouncedRefresh();
   });
-  if (typeof joplin2.workspace.onFolderSelectionChange === "function") {
-    await joplin2.workspace.onFolderSelectionChange(async () => {
+  await registerOptionalWorkspaceEvent(
+    joplin2.workspace,
+    "onFolderSelectionChange",
+    async () => {
       await handlers.refresh();
-    });
-  }
-  if (typeof joplin2.workspace.onNoteChange === "function") {
-    await joplin2.workspace.onNoteChange(async (event) => {
+    }
+  );
+  await registerOptionalWorkspaceEvent(
+    joplin2.workspace,
+    "onNoteChange",
+    async (event) => {
       if (event && typeof event.id === "string") {
         await handlers.handleNoteChange(event.id);
       }
       debouncedRefresh();
-    });
-  }
-  if (typeof joplin2.workspace.onSyncComplete === "function") {
-    await joplin2.workspace.onSyncComplete(async () => {
+    }
+  );
+  await registerOptionalWorkspaceEvent(
+    joplin2.workspace,
+    "onSyncComplete",
+    async () => {
       debouncedRefresh();
-    });
-  }
+    }
+  );
 };
 
 // src/storage.ts

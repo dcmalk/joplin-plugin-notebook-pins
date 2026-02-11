@@ -62,4 +62,33 @@ describe('workspace events wiring', () => {
 
     vi.useRealTimers();
   });
+
+  test('skips optional workspace events when runtime reports unsupported methods', async () => {
+    const unsupported = vi.fn(async () => {
+      throw new Error(
+        'Property or method "onFolderSelectionChange" does not exist in "joplin.workspace.onFolderSelectionChange"',
+      );
+    });
+
+    const joplinMock = {
+      workspace: {
+        onNoteSelectionChange: vi.fn(async (_cb: () => Promise<void>) => undefined),
+        onFolderSelectionChange: unsupported,
+        onNoteChange: vi.fn(async (_cb: (event: { id?: string }) => Promise<void>) => undefined),
+        onSyncComplete: vi.fn(async (_cb: () => Promise<void>) => undefined),
+      },
+    };
+
+    const refresh = vi.fn(async () => undefined);
+    const handleNoteChange = vi.fn(async (_noteId: string) => undefined);
+    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+
+    await expect(registerWorkspaceEvents(joplinMock, { refresh, handleNoteChange })).resolves.toBeUndefined();
+    expect(unsupported).toHaveBeenCalledTimes(1);
+    expect(infoSpy).toHaveBeenCalledWith(
+      'Notebook Pins: skipping unsupported workspace event "onFolderSelectionChange".',
+    );
+
+    infoSpy.mockRestore();
+  });
 });

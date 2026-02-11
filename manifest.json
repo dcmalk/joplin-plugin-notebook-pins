@@ -2,7 +2,7 @@
   "manifest_version": 1,
   "id": "com.thirdorbitlabs.notebook-pins",
   "app_min_version": "2.8",
-  "version": "0.1.0",
+  "version": "0.1.1-rc.1",
   "name": "Notebook Pins",
   "description": "Pin notes per notebook and view them in a notebook-aware panel.",
   "author": "Contributors",

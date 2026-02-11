@@ -11,6 +11,31 @@ const debounce = (callback: () => void, waitMs: number): (() => void) => {
   };
 };
 
+const isUnsupportedWorkspaceEventError = (error: unknown): boolean => {
+  if (!(error instanceof Error)) return false;
+  const message = error.message.toLowerCase();
+  return message.includes('property or method') && message.includes('does not exist');
+};
+
+const registerOptionalWorkspaceEvent = async (
+  workspace: any,
+  eventName: string,
+  callback: (...args: any[]) => Promise<void>,
+): Promise<void> => {
+  const register = workspace?.[eventName];
+  if (typeof register !== 'function') return;
+
+  try {
+    await register(callback);
+  } catch (error) {
+    if (isUnsupportedWorkspaceEventError(error)) {
+      console.info(`Notebook Pins: skipping unsupported workspace event "${eventName}".`);
+      return;
+    }
+    throw error;
+  }
+};
+
 export const registerWorkspaceEvents = async (
   joplin: any,
   handlers: EventHandlers,
@@ -23,24 +48,30 @@ export const registerWorkspaceEvents = async (
     debouncedRefresh();
   });
 
-  if (typeof joplin.workspace.onFolderSelectionChange === 'function') {
-    await joplin.workspace.onFolderSelectionChange(async () => {
+  await registerOptionalWorkspaceEvent(
+    joplin.workspace,
+    'onFolderSelectionChange',
+    async () => {
       await handlers.refresh();
-    });
-  }
+    },
+  );
 
-  if (typeof joplin.workspace.onNoteChange === 'function') {
-    await joplin.workspace.onNoteChange(async (event: { id?: string }) => {
+  await registerOptionalWorkspaceEvent(
+    joplin.workspace,
+    'onNoteChange',
+    async (event: { id?: string }) => {
       if (event && typeof event.id === 'string') {
         await handlers.handleNoteChange(event.id);
       }
       debouncedRefresh();
-    });
-  }
+    },
+  );
 
-  if (typeof joplin.workspace.onSyncComplete === 'function') {
-    await joplin.workspace.onSyncComplete(async () => {
+  await registerOptionalWorkspaceEvent(
+    joplin.workspace,
+    'onSyncComplete',
+    async () => {
       debouncedRefresh();
-    });
-  }
+    },
+  );
 };

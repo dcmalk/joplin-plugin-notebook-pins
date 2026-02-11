@@ -15,7 +15,15 @@
 - [x] Add max-pins-per-notebook setting and enforcement.
 - [x] Add baseline unit tests for storage and service logic.
 - [x] Add integration tests with mocked Joplin API wiring.
-- [ ] Add manual QA pass in Joplin desktop (Windows target).
+- [x] Add manual QA pass in Joplin desktop (Windows target).
+
+Manual QA evidence (Windows, 2026-02-11):
+- [x] Pin from note list context menu.
+- [x] Unpin from note list context menu.
+- [x] Panel updates when switching notebooks.
+- [x] Click pinned item in panel opens the correct note.
+- [x] Pins persist across Joplin restart.
+- [x] Deleted/moved pinned notes are cleaned up on refresh.
 
 ## Milestone C (`v1.1`)
 

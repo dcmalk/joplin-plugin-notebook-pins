@@ -111,23 +111,30 @@ Command behavior:
 
 Panel title format:
 
-- `Pinned in "{NotebookName}"`
+- Static banner: `PINNED`
+- Leading banner icon: pushpin (`📌︎`)
 
 Empty states:
 
-- No notebook selected: `Select a notebook to view pinned notes.`
-- Notebook selected with zero pins: `Right-click a note -> Pin in this notebook.`
+- Minimal banner-only display (no helper text/noise) when:
+  - no notebook is selected
+  - current notebook has zero pins
 
 List item fields (`v1`):
 
+- Leading document icon (`📄︎`)
 - Note title
-- Optional todo indicator (`is_todo`)
+- Optional todo indicator prefix (`[ ] `) for todo notes
 
 Webview action events to host:
 
 - `OPEN_NOTE` with `{ noteId }`
-- `UNPIN_NOTE` with `{ noteId }`
-- `REORDER_PINS` with `{ noteIdsInOrder }` (defined now, implemented in `v1.1`)
+
+Panel unpin behavior:
+
+- Not available in panel UI for `v1`.
+- Unpin remains available from note list context menu command:
+  - `Unpin from this notebook`
 
 Render payload host to webview:
 
@@ -148,6 +155,8 @@ Render payload host to webview:
   }
 }
 ```
+
+Note: payload retains notebook context and empty-message fields for future evolution, even though the current minimal strip does not render helper text.
 
 ## 7. Event Flow and Refresh Strategy
 
@@ -258,6 +267,5 @@ Manual QA checklist:
 
 ## 12. Open Decisions
 
-- Confirm exact user-facing messaging API for command no-op/error feedback.
-- Confirm final panel layout constraints for small/mobile widths.
-- Decide whether `v1` should include reorder now or strictly defer to `v1.1` (current spec defers).
+- Confirm packaging/distribution flow for first public release (development-path usage is validated).
+- Finalize `v1.1` scope boundary: reorder only vs reorder + auto-migrate in same release.

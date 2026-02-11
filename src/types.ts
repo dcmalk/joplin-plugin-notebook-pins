@@ -26,5 +26,5 @@ export interface PanelRenderModel {
 
 export type PanelAction =
   | { type: 'OPEN_NOTE'; noteId: string }
-  | { type: 'UNPIN_NOTE'; noteId: string }
+  | { type: 'UNPIN_NOTE'; noteId: string; folderId: string }
   | { type: 'REORDER_PINS'; noteIdsInOrder: string[] };

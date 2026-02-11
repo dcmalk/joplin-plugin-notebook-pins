@@ -4,7 +4,6 @@ interface PanelAdapter {
   create(id: string): Promise<string>;
   setHtml(handle: string, html: string): Promise<void>;
   onMessage(handle: string, callback: (message: unknown) => Promise<void>): Promise<void>;
-  postMessage(handle: string, message: unknown): Promise<void>;
 }
 
 export class NotebookPinsPanel {
@@ -17,33 +16,51 @@ export class NotebookPinsPanel {
 
   async init(): Promise<void> {
     this.handle = await this.panelAdapter.create('notebookPins.panel');
-    await this.panelAdapter.setHtml(this.handle, getPanelHtml());
     await this.panelAdapter.onMessage(this.handle, async (message) => {
       const action = parsePanelAction(message);
       if (!action) return;
       await this.onAction(action);
     });
+    await this.render({
+      folderId: null,
+      folderName: null,
+      title: 'Pinned notes',
+      emptyMessage: 'Select a notebook to view pinned notes.',
+      pins: [],
+      capabilities: { reorder: false },
+    });
   }
 
   async render(model: PanelRenderModel): Promise<void> {
     if (!this.handle) return;
-    await this.panelAdapter.postMessage(this.handle, {
-      type: 'RENDER',
-      payload: model,
-    });
+    await this.panelAdapter.setHtml(this.handle, getPanelHtml(model));
   }
 }
 
 const parsePanelAction = (message: unknown): PanelAction | null => {
-  if (typeof message !== 'object' || message === null) return null;
-  const event = message as Record<string, unknown>;
+  let payload: unknown = message;
+  if (typeof payload === 'string') {
+    try {
+      payload = JSON.parse(payload);
+    } catch {
+      return null;
+    }
+  }
+
+  if (typeof payload !== 'object' || payload === null) return null;
+  const event = payload as Record<string, unknown>;
   const type = event.type;
 
   if (type === 'OPEN_NOTE' && typeof event.noteId === 'string') {
     return { type, noteId: event.noteId };
   }
-  if (type === 'UNPIN_NOTE' && typeof event.noteId === 'string') {
-    return { type, noteId: event.noteId };
+  if (
+    type === 'UNPIN_NOTE' &&
+    typeof event.noteId === 'string' &&
+    typeof event.folderId === 'string' &&
+    event.folderId.length > 0
+  ) {
+    return { type, noteId: event.noteId, folderId: event.folderId };
   }
   if (
     type === 'REORDER_PINS' &&
@@ -56,7 +73,42 @@ const parsePanelAction = (message: unknown): PanelAction | null => {
   return null;
 };
 
-const getPanelHtml = (): string => `<!doctype html>
+const escapeHtml = (value: string): string =>
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+const getPanelHtml = (model: PanelRenderModel): string => {
+  const title = escapeHtml(model.title || 'Pinned notes');
+  const emptyMessage = escapeHtml(model.emptyMessage || 'No pinned notes.');
+  const errorMessage = model.error ? escapeHtml(model.error) : '';
+  const folderId = model.folderId ? escapeHtml(model.folderId) : '';
+
+  const pinsHtml =
+    model.pins.length === 0
+      ? `<div class="empty">${emptyMessage}</div>`
+      : `<ul>${model.pins
+          .map((pin) => {
+            const noteId = escapeHtml(pin.noteId);
+            const noteTitle = escapeHtml(pin.title);
+            const todoPrefix = pin.isTodo ? '[ ] ' : '';
+            const unpinAttrs = folderId
+              ? `data-action="unpin" data-note-id="${noteId}" data-folder-id="${folderId}"`
+              : 'disabled';
+            return `<li>
+              <span class="title">${todoPrefix}${noteTitle}</span>
+              <span class="actions">
+                <button type="button" data-action="open" data-note-id="${noteId}">Open</button>
+                <button type="button" ${unpinAttrs}>Unpin</button>
+              </span>
+            </li>`;
+          })
+          .join('')}</ul>`;
+
+  return `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -76,6 +128,14 @@ const getPanelHtml = (): string => `<!doctype html>
       }
       .empty {
         opacity: 0.8;
+      }
+      .error {
+        margin: 0 0 10px;
+        padding: 8px;
+        border: 1px solid #d14343;
+        border-radius: 4px;
+        background: rgba(209, 67, 67, 0.1);
+        color: #d14343;
       }
       ul {
         list-style: none;
@@ -109,78 +169,53 @@ const getPanelHtml = (): string => `<!doctype html>
     </style>
   </head>
   <body>
-    <h2 id="panel-title">Pinned notes</h2>
-    <div id="content"></div>
+    <h2>${title}</h2>
+    ${errorMessage ? `<div id="error" class="error">${errorMessage}</div>` : ''}
+    <div id="content">${pinsHtml}</div>
     <script>
-      const state = {
-        title: 'Pinned notes',
-        pins: [],
-        emptyMessage: 'Right-click a note -> Pin in this notebook.',
+      const getWebviewApi = () => {
+        if (typeof webviewApi !== 'undefined' && webviewApi) return webviewApi;
+        if (typeof window !== 'undefined' && window.webviewApi) return window.webviewApi;
+        return null;
       };
-
-      const panelTitle = document.getElementById('panel-title');
-      const content = document.getElementById('content');
+      const api = getWebviewApi();
 
       const post = (event) => {
-        if (window.webviewApi && typeof window.webviewApi.postMessage === 'function') {
-          window.webviewApi.postMessage(event);
+        if (api && typeof api.postMessage === 'function') {
+          api.postMessage(event);
         }
       };
 
-      const render = () => {
-        panelTitle.textContent = state.title || 'Pinned notes';
-
-        if (!state.pins || state.pins.length === 0) {
-          content.innerHTML = '<div class="empty"></div>';
-          content.querySelector('.empty').textContent = state.emptyMessage || 'No pinned notes.';
-          return;
+      if (!api || typeof api.postMessage !== 'function') {
+        const content = document.getElementById('content');
+        if (content) {
+          const warning = document.createElement('div');
+          warning.className = 'error';
+          warning.textContent = 'Panel actions are unavailable: webview bridge not found.';
+          content.prepend(warning);
         }
-
-        const list = document.createElement('ul');
-        for (const pin of state.pins) {
-          const item = document.createElement('li');
-
-          const title = document.createElement('span');
-          title.className = 'title';
-          title.textContent = (pin.isTodo ? '[ ] ' : '') + pin.title;
-
-          const actions = document.createElement('span');
-          actions.className = 'actions';
-
-          const openBtn = document.createElement('button');
-          openBtn.type = 'button';
-          openBtn.textContent = 'Open';
-          openBtn.addEventListener('click', () => post({ type: 'OPEN_NOTE', noteId: pin.noteId }));
-
-          const unpinBtn = document.createElement('button');
-          unpinBtn.type = 'button';
-          unpinBtn.textContent = 'Unpin';
-          unpinBtn.addEventListener('click', () => post({ type: 'UNPIN_NOTE', noteId: pin.noteId }));
-
-          actions.appendChild(openBtn);
-          actions.appendChild(unpinBtn);
-          item.appendChild(title);
-          item.appendChild(actions);
-          list.appendChild(item);
-        }
-
-        content.innerHTML = '';
-        content.appendChild(list);
-      };
-
-      const handleRenderMessage = (message) => {
-        if (!message || message.type !== 'RENDER') return;
-        Object.assign(state, message.payload || {});
-        render();
-      };
-
-      if (window.webviewApi && typeof window.webviewApi.onMessage === 'function') {
-        window.webviewApi.onMessage(handleRenderMessage);
-      } else {
-        window.addEventListener('message', (event) => handleRenderMessage(event.data));
       }
 
-      render();
+      const buttons = document.querySelectorAll('button[data-action]');
+      buttons.forEach((button) => {
+        button.addEventListener('click', () => {
+          const action = button.getAttribute('data-action');
+          if (action === 'open') {
+            const noteId = button.getAttribute('data-note-id');
+            if (noteId) post({ type: 'OPEN_NOTE', noteId });
+            return;
+          }
+
+          if (action === 'unpin') {
+            const noteId = button.getAttribute('data-note-id');
+            const currentFolderId = button.getAttribute('data-folder-id');
+            if (noteId && currentFolderId) {
+              post({ type: 'UNPIN_NOTE', noteId, folderId: currentFolderId });
+            }
+          }
+        });
+      });
     </script>
   </body>
 </html>`;
+};

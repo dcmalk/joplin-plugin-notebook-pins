@@ -4,13 +4,11 @@ import { NotebookPinsPanel } from '../../src/panel';
 describe('panel wiring', () => {
   test('renders and forwards valid panel actions to host', async () => {
     const setHtml = vi.fn(async () => undefined);
-    const postMessage = vi.fn(async () => undefined);
 
     const panelAdapter = {
       create: vi.fn(async () => 'handle-1'),
       setHtml,
       onMessage: vi.fn(async (_handle: string, _cb: (message: unknown) => Promise<void>) => undefined),
-      postMessage,
     };
 
     const onAction = vi.fn(async () => undefined);
@@ -28,10 +26,7 @@ describe('panel wiring', () => {
       pins: [],
       capabilities: { reorder: false },
     });
-    expect(postMessage).toHaveBeenCalledWith(
-      'handle-1',
-      expect.objectContaining({ type: 'RENDER' }),
-    );
+    expect(setHtml).toHaveBeenCalledTimes(2);
 
     const messageCb = panelAdapter.onMessage.mock.calls[0]?.[1] as
       | ((message: unknown) => Promise<void>)
@@ -42,13 +37,17 @@ describe('panel wiring', () => {
     }
 
     await messageCb({ type: 'OPEN_NOTE', noteId: 'note1' });
-    await messageCb({ type: 'UNPIN_NOTE', noteId: 'note2' });
+    await messageCb({ type: 'UNPIN_NOTE', noteId: 'note2', folderId: 'folderA' });
     await messageCb({ type: 'REORDER_PINS', noteIdsInOrder: ['note3', 'note4'] });
     await messageCb({ type: 'UNKNOWN' });
 
     expect(onAction).toHaveBeenCalledTimes(3);
     expect(onAction).toHaveBeenNthCalledWith(1, { type: 'OPEN_NOTE', noteId: 'note1' });
-    expect(onAction).toHaveBeenNthCalledWith(2, { type: 'UNPIN_NOTE', noteId: 'note2' });
+    expect(onAction).toHaveBeenNthCalledWith(2, {
+      type: 'UNPIN_NOTE',
+      noteId: 'note2',
+      folderId: 'folderA',
+    });
     expect(onAction).toHaveBeenNthCalledWith(3, {
       type: 'REORDER_PINS',
       noteIdsInOrder: ['note3', 'note4'],

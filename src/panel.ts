@@ -26,7 +26,7 @@ export class NotebookPinsPanel {
     await this.render({
       folderId: null,
       folderName: null,
-      title: 'Pinned notes',
+      title: 'PINNED',
       emptyMessage: 'Select a notebook to view pinned notes.',
       pins: [],
       capabilities: { reorder: false },
@@ -103,92 +103,129 @@ const escapeHtml = (value: string): string =>
     .replace(/'/g, '&#39;');
 
 const getPanelHtml = (model: PanelRenderModel): string => {
-  const title = escapeHtml(model.title || 'Pinned notes');
-  const emptyMessage = escapeHtml(model.emptyMessage || 'No pinned notes.');
+  const title = escapeHtml(model.title || 'PINNED');
   const errorMessage = model.error ? escapeHtml(model.error) : '';
-  const folderId = model.folderId ? escapeHtml(model.folderId) : '';
-
   const pinsHtml =
     model.pins.length === 0
-      ? `<div class="empty">${emptyMessage}</div>`
-      : `<ul>${model.pins
-          .map((pin) => {
+      ? ''
+      : model.pins
+          .map((pin, index) => {
             const noteId = escapeHtml(pin.noteId);
             const noteTitle = escapeHtml(pin.title);
             const todoPrefix = pin.isTodo ? '[ ] ' : '';
-            const unpinAttrs = folderId
-              ? `data-action="unpin" data-note-id="${noteId}" data-folder-id="${folderId}"`
-              : 'disabled';
-
-            return `<li>
-              <span class="title">${todoPrefix}${noteTitle}</span>
-              <span class="actions">
-                <button type="button" data-action="open" data-note-id="${noteId}">Open</button>
-                <button type="button" ${unpinAttrs}>Unpin</button>
-              </span>
-            </li>`;
+            const separator = index > 0 ? `<span class="pin-sep" aria-hidden="true"></span>` : '';
+            return `${separator}<button type="button" class="pin-chip" data-action="open" data-note-id="${noteId}" title="${noteTitle}"><span class="item-icon">&#128196;&#65038;</span><span class="pin-label">${todoPrefix}${noteTitle}</span></button>`;
           })
-          .join('')}</ul>`;
+          .join('');
 
   return `
 <style>
   :root {
-    color-scheme: light dark;
+    color-scheme: light;
   }
   body {
     margin: 0;
-    padding: 12px;
-    font: 13px/1.4 sans-serif;
+    padding: 6px 8px;
+    font: 12px/1.4 sans-serif;
+    background: #F4F5F6;
+    color: #627184;
   }
-  h2 {
-    margin: 0 0 10px;
-    font-size: 14px;
-  }
-  .empty {
-    opacity: 0.8;
-  }
-  .error {
-    margin: 0 0 10px;
-    padding: 8px;
-    border: 1px solid #d14343;
-    border-radius: 4px;
-    background: rgba(209, 67, 67, 0.1);
-    color: #d14343;
-  }
-  .bridge-status {
-    font-size: 11px;
-    opacity: 0.7;
-    margin: 0 0 8px;
-  }
-  ul {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-  }
-  li {
+  .strip {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: 8px;
-    padding: 8px 0;
-    border-bottom: 1px solid rgba(127, 127, 127, 0.25);
+    min-width: 0;
+    background: #F4F5F6;
   }
-  .title {
+  .strip-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    font-weight: 400;
+    white-space: nowrap;
+    color: #627184;
+  }
+  .banner-icon {
+    flex: 0 0 auto;
+    font-size: 12px;
+    line-height: 1;
+    color: #627184;
+  }
+  #panel-content {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    min-width: 0;
+    min-height: 22px;
+    flex: 1 1 auto;
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+    scrollbar-width: thin;
+    background: #F4F5F6;
+  }
+  .pin-chip {
+    flex: 0 0 auto;
+    max-width: 220px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    align-self: stretch;
+    box-sizing: border-box;
+    overflow: hidden;
+    white-space: nowrap;
+    margin: 0;
+    height: 22px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 0;
+    appearance: none;
+    -webkit-appearance: none;
+    background: #F4F5F6;
+    color: #627184;
+    font: inherit;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .pin-chip:hover {
+    background: #CBDAF1;
+  }
+  .pin-chip:focus-visible {
+    outline: 1px solid #8faed6;
+    outline-offset: 1px;
+  }
+  .item-icon {
+    flex: 0 0 auto;
+    font-size: 12px;
+    line-height: 1;
+    color: #627184;
+  }
+  .pin-label {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .actions {
-    display: inline-flex;
-    gap: 6px;
-    flex-shrink: 0;
+  .pin-sep {
+    align-self: stretch;
+    flex: 0 0 1px;
+    width: 1px;
+    margin: 0 4px;
+    background: rgba(98, 113, 132, 0.45);
   }
-  button {
-    font: inherit;
+  .error {
+    margin-top: 6px;
+    padding: 4px 6px;
+    border: 1px solid #d14343;
+    border-radius: 4px;
+    background: rgba(209, 67, 67, 0.1);
+    color: #d14343;
+    font-size: 12px;
   }
 </style>
-<h2 id="panel-title">${title}</h2>
-<div id="bridge-status" class="bridge-status">Bridge: pending</div>
-${errorMessage ? `<div class="error">${errorMessage}</div>` : ''}
-<div id="panel-content">${pinsHtml}</div>`;
+<div class="strip">
+  <span class="strip-title"><span class="banner-icon">&#128204;&#65038;</span><span>${title}</span></span>
+  <div id="panel-content">${pinsHtml}</div>
+</div>
+${errorMessage ? `<div class="error">${errorMessage}</div>` : ''}`;
 };

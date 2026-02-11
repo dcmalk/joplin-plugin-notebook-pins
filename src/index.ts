@@ -145,7 +145,7 @@ joplinApi.plugins.register({
           const model: PanelRenderModel = {
             folderId: null,
             folderName: null,
-            title: 'Pinned notes',
+            title: 'PINNED',
             emptyMessage: 'Select a notebook to view pinned notes.',
             pins: [],
             capabilities: { reorder: false },
@@ -158,8 +158,8 @@ joplinApi.plugins.register({
         const model: PanelRenderModel = {
           folderId: folder.id,
           folderName: folder.title,
-          title: `Pinned in "${folder.title}"`,
-          emptyMessage: 'Right-click a note -> Pin in this notebook.',
+          title: 'PINNED',
+          emptyMessage: 'Right-click a note → Pin in this notebook.',
           pins: pinnedNotes,
           capabilities: { reorder: false },
         };
@@ -168,7 +168,7 @@ joplinApi.plugins.register({
         const model: PanelRenderModel = {
           folderId: null,
           folderName: null,
-          title: 'Pinned notes',
+          title: 'PINNED',
           emptyMessage: 'Unable to render pinned notes right now.',
           pins: [],
           capabilities: { reorder: false },

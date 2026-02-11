@@ -1,20 +1,23 @@
-# Joplin Notebook Pins Plugin
+# Joplin Notebook Pins
 
-Notebook-aware pinned notes for Joplin.  
-This plugin keeps important notes visible per notebook (for example, index notes) without renaming titles or changing note sort order.
+**Notebook-aware pinned notes for Joplin.**
 
-## Current Status
+This plugin solves the problem of keeping key notes (like index notes or project dashboards) accessible within specific notebooks without resorting to "title hacks" (e.g., `!Index`) or changing your global sort order.
 
-- `v1` core is implemented:
-  - Pin/unpin notes in the current notebook
-  - Notebook-scoped panel rendering
-  - Click-to-open from panel
-  - Persistent state and stale pin cleanup
-- `v1.1` planned:
-  - Drag reorder
-  - Optional auto-migrate on note move
+## Features
 
-See `docs/prd.md`, `docs/spec.md`, and `docs/tasks.md` for details.
+- 📌 **Notebook-Scoped:** Pins are attached to a specific notebook. Switching notebooks automatically refreshes the list.
+- ⚡ **Fast Access:** Dedicated side panel for one-click navigation to your most important notes.
+- 🧹 **Clean Workflow:** Does not modify your note titles or native note list sorting.
+- 💾 **Persistent:** Pins are saved and restored across sessions.
+
+## Usage
+
+1.  **Pin a Note:** Right-click a note in the note list and select **"Pin in this notebook"**.
+2.  **Open:** Click any note in the "Notebook Pins" panel to open it immediately.
+3.  **Unpin:** Right-click the note again to **"Unpin from this notebook"**, or use the command palette.
+
+---
 
 ## Development Setup
 
@@ -48,15 +51,14 @@ This repository is currently intended for development loading.
 2. In Joplin Desktop, open plugin advanced settings and set the development plugin path to this repository.
 3. Restart Joplin and enable the plugin.
 
-## Project Structure
-
-- `src/` plugin runtime code
-- `tests/unit/` unit tests
-- `tests/integration/` wiring/integration tests with mocks
-- `docs/` product and technical documentation
-
 ## Contributing
 
 - Follow `AGENTS.md` for repository conventions.
 - Use Conventional Commits (`feat: ...`, `fix: ...`, `docs: ...`).
 - Include test evidence in pull requests.
+- See `docs/` for detailed specifications (`prd.md`, `spec.md`).
+
+## Roadmap
+
+- [x] **v1.0 (MVP):** Core pinning, panel UI, persistence.
+- [ ] **v1.1:** Drag-and-drop reordering, auto-migration when notes are moved.

@@ -88,22 +88,6 @@ export class PinsService {
     return { changed: true };
   }
 
-  async unpinNoteEverywhere(noteId: string): Promise<boolean> {
-    const existingFolderId = this.state.noteToFolderIndex[noteId];
-    if (existingFolderId) {
-      const changed = this.removePinInternal(noteId, existingFolderId);
-      if (changed) await this.persist();
-      return changed;
-    }
-
-    let changed = false;
-    for (const folderId of Object.keys(this.state.pinsByFolderId)) {
-      changed = this.removePinInternal(noteId, folderId) || changed;
-    }
-    if (changed) await this.persist();
-    return changed;
-  }
-
   async listPinnedNotes(folderId: string): Promise<PinnedNote[]> {
     const noteIds = this.getPinnedIds(folderId);
     if (noteIds.length === 0) return [];
